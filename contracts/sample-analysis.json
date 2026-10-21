@@ -1,0 +1,19 @@
+{
+  "analysis_id": "analysis_demo_001",
+  "transaction_id": "txn_demo_001",
+  "status": "completed",
+  "findings": [
+    {
+      "id": "finding_demo_001",
+      "issue_type": "missing_delivery_proof",
+      "severity": "high",
+      "explanation": "No delivery confirmation was found among the supplied documents.",
+      "source_ids": [
+        "doc_demo_001"
+      ],
+      "recommendation": "Upload a verifiable delivery record if available."
+    }
+  ],
+  "draft_response": null,
+  "merchant_approval_required": true
+}
