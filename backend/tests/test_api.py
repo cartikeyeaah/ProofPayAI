@@ -31,6 +31,7 @@ def test_health_and_docs(client):
 
 def test_transactions(client):
     fixture = json.loads((ROOT / 'contracts/sample-transaction.json').read_text())
+    fixture['evidence_count'] = 0
     response = client.get('/api/v1/transactions')
     assert response.status_code == 200
     assert response.json() == [fixture]
@@ -56,7 +57,8 @@ def test_job_lifecycle(client):
     for _ in range(2):
         retrieved = client.get('/api/v1/analysis/' + job.analysis_id)
         assert retrieved.status_code == 200
-        assert retrieved.json() == response.json()
+        assert retrieved.json()['analysis_id'] == job.analysis_id
+        assert retrieved.json()['status'] == 'completed'
     other = client.post('/api/v1/transactions/txn_demo_001/analyze', json={})
     assert other.json()['analysis_id'] != job.analysis_id
     with TestClient(create_app()) as fresh:

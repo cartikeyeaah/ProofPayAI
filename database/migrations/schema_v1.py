@@ -1,0 +1,28 @@
+# Frozen schema for migration 0001; do not edit after deployment.
+"""Normalized PostgreSQL persistence, isolated from the historical public-schema DDL."""
+from sqlalchemy import MetaData, Table, Column, String, Text, ForeignKey, UniqueConstraint, Numeric, DateTime, Boolean, Integer, Index
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+
+metadata = MetaData(schema='proofpay')
+def uid(name='id', **kwargs): return Column(name, UUID(as_uuid=False), **kwargs)
+def ref(table): return ForeignKey(f'proofpay.{table}.id')
+merchants = Table('merchants', metadata, uid(primary_key=True), Column('name', Text, nullable=False))
+users = Table('users', metadata, uid(primary_key=True), uid('merchant_id', nullable=False), Column('email', String(254), nullable=False, unique=True), Column('password_hash', Text, nullable=False), Column('created_at', DateTime(timezone=True), nullable=False))
+users.append_constraint(__import__('sqlalchemy').ForeignKeyConstraint(['merchant_id'], ['proofpay.merchants.id']))
+sessions = Table('sessions', metadata, uid(primary_key=True), Column('token_hash', String(64), unique=True, nullable=False), Column('csrf', String(128), nullable=False), Column('user_id', UUID(as_uuid=False), ref('users'), nullable=False), Column('expires_at', DateTime(timezone=True), nullable=False, index=True))
+transactions = Table('transactions', metadata, uid(primary_key=True), Column('merchant_id', UUID(as_uuid=False), ref('merchants'), nullable=False), Column('api_id', String(100), nullable=False), Column('paypal_transaction_id', Text, nullable=False), Column('amount', Numeric(12,2), nullable=False), Column('currency', String(3), nullable=False), Column('transaction_date', DateTime(timezone=True), nullable=False), Column('data', JSONB, nullable=False), Column('origin', String(20), nullable=False), UniqueConstraint('merchant_id', 'api_id'), UniqueConstraint('merchant_id', 'paypal_transaction_id'), UniqueConstraint('merchant_id', 'id'))
+evidence = Table('evidence_documents', metadata, uid(primary_key=True), Column('merchant_id', UUID(as_uuid=False), ref('merchants'), nullable=False), Column('transaction_id', UUID(as_uuid=False), nullable=False), Column('api_id', String(100), nullable=False), Column('storage_key', Text, nullable=False), Column('data', JSONB, nullable=False), UniqueConstraint('merchant_id', 'api_id'), UniqueConstraint('merchant_id', 'id'))
+analyses = Table('analysis_runs', metadata, uid(primary_key=True), Column('merchant_id', UUID(as_uuid=False), ref('merchants'), nullable=False), Column('transaction_id', UUID(as_uuid=False), nullable=False), Column('api_id', String(100), nullable=False), Column('status', String(20), nullable=False), Column('data', JSONB, nullable=False), Column('details', JSONB, nullable=False), UniqueConstraint('merchant_id', 'api_id'), UniqueConstraint('merchant_id', 'id'))
+findings = Table('findings', metadata, uid(primary_key=True), Column('merchant_id', UUID(as_uuid=False), ref('merchants'), nullable=False), Column('analysis_id', UUID(as_uuid=False), nullable=False), Column('data', JSONB, nullable=False), UniqueConstraint('merchant_id', 'id'))
+sources = Table('finding_sources', metadata, uid(primary_key=True), Column('merchant_id', UUID(as_uuid=False), ref('merchants'), nullable=False), Column('finding_id', UUID(as_uuid=False), nullable=False), Column('document_id', UUID(as_uuid=False), nullable=False), Column('spans', JSONB, nullable=False))
+drafts = Table('draft_responses', metadata, uid(primary_key=True), Column('merchant_id', UUID(as_uuid=False), ref('merchants'), nullable=False), Column('analysis_id', UUID(as_uuid=False), nullable=False), Column('data', JSONB, nullable=False), UniqueConstraint('analysis_id'))
+revisions = Table('draft_revisions', metadata, uid(primary_key=True), Column('merchant_id', UUID(as_uuid=False), ref('merchants'), nullable=False), Column('analysis_id', UUID(as_uuid=False), nullable=False), Column('version', Integer, nullable=False), Column('data', JSONB, nullable=False), UniqueConstraint('analysis_id', 'version'))
+audit = Table('audit_events', metadata, uid(primary_key=True), Column('merchant_id', UUID(as_uuid=False), ref('merchants'), nullable=False), Column('created_at', DateTime(timezone=True), nullable=False), Column('data', JSONB, nullable=False))
+idempotency = Table('idempotency_keys', metadata, uid(primary_key=True), Column('merchant_id', UUID(as_uuid=False), ref('merchants'), nullable=False), Column('key', String(100), nullable=False), Column('analysis_id', UUID(as_uuid=False), nullable=False), Column('api_id', String(100), nullable=False), UniqueConstraint('merchant_id', 'key'))
+from sqlalchemy import ForeignKeyConstraint, CheckConstraint
+for table, col, target in [(evidence,'transaction_id',transactions), (analyses,'transaction_id',transactions), (findings,'analysis_id',analyses), (sources,'finding_id',findings), (sources,'document_id',evidence), (drafts,'analysis_id',analyses), (revisions,'analysis_id',analyses), (idempotency,'analysis_id',analyses)]:
+    table.append_constraint(ForeignKeyConstraint(['merchant_id', col], [target.c.merchant_id, target.c.id]))
+    Index(f'{table.name}_{col}_idx', table.c.merchant_id, table.c[col])
+analyses.append_constraint(CheckConstraint("status IN ('queued','processing','completed','failed')"))
+Index('transactions_merchant_date_idx', transactions.c.merchant_id, transactions.c.transaction_date)
+Index('audit_merchant_time_idx', audit.c.merchant_id, audit.c.created_at)
