@@ -1,0 +1,9 @@
+{
+  "id": "txn_demo_001",
+  "paypal_transaction_id": "DEMO-1001",
+  "amount": "150.00",
+  "currency": "USD",
+  "status": "COMPLETED",
+  "transaction_date": "2026-10-15T10:30:00Z",
+  "evidence_count": 2
+}

@@ -1,0 +1,450 @@
+openapi: 3.1.0
+info:
+  title: ProofPay AI Day 1 Mock API
+  description: Synthetic data only. Jobs remain queued. No persistence, authentication,
+    or AI pipeline.
+  version: 0.1.0
+paths:
+  /api/v1/health:
+    get:
+      summary: Health
+      operationId: health_api_v1_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '405':
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/transactions:
+    get:
+      summary: Transactions
+      operationId: transactions_api_v1_transactions_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/Transaction'
+                type: array
+                title: Response Transactions Api V1 Transactions Get
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '405':
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/transactions/{transaction_id}:
+    get:
+      summary: Transaction
+      operationId: transaction_api_v1_transactions__transaction_id__get
+      parameters:
+      - name: transaction_id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Transaction Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '405':
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/transactions/{transaction_id}/analyze:
+    post:
+      summary: Analyze
+      operationId: analyze_api_v1_transactions__transaction_id__analyze_post
+      parameters:
+      - name: transaction_id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Transaction Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyzeRequest'
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Analysis'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '405':
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/analysis/{analysis_id}:
+    get:
+      summary: Analysis
+      operationId: analysis_api_v1_analysis__analysis_id__get
+      parameters:
+      - name: analysis_id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Analysis Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Analysis'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '405':
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/transactions/{transaction_id}/demo-analysis:
+    get:
+      summary: Demo Analysis
+      description: Static contract demonstration only; does not process evidence or
+        complete a job.
+      operationId: demo_analysis_api_v1_transactions__transaction_id__demo_analysis_get
+      parameters:
+      - name: transaction_id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Transaction Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Analysis'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '405':
+          description: Method not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    Analysis:
+      properties:
+        analysis_id:
+          type: string
+          maxLength: 100
+          minLength: 1
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Analysis Id
+        transaction_id:
+          type: string
+          maxLength: 100
+          minLength: 1
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Transaction Id
+        status:
+          type: string
+          enum:
+          - queued
+          - processing
+          - completed
+          - failed
+          title: Status
+        findings:
+          items:
+            $ref: '#/components/schemas/Finding'
+          type: array
+          title: Findings
+        draft_response:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Draft Response
+        merchant_approval_required:
+          type: boolean
+          const: true
+          title: Merchant Approval Required
+      additionalProperties: false
+      type: object
+      required:
+      - analysis_id
+      - transaction_id
+      - status
+      - findings
+      - draft_response
+      - merchant_approval_required
+      title: Analysis
+    AnalyzeRequest:
+      properties: {}
+      additionalProperties: false
+      type: object
+      title: AnalyzeRequest
+      description: 'Reserved integration boundary: only an empty JSON object is accepted.'
+    ErrorDetail:
+      properties:
+        code:
+          type: string
+          title: Code
+        message:
+          type: string
+          title: Message
+        request_id:
+          type: string
+          title: Request Id
+      additionalProperties: false
+      type: object
+      required:
+      - code
+      - message
+      - request_id
+      title: ErrorDetail
+    ErrorResponse:
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+      additionalProperties: false
+      type: object
+      required:
+      - error
+      title: ErrorResponse
+    Finding:
+      properties:
+        id:
+          type: string
+          maxLength: 100
+          minLength: 1
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Id
+        issue_type:
+          type: string
+          title: Issue Type
+        severity:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          title: Severity
+        explanation:
+          type: string
+          title: Explanation
+        source_ids:
+          items:
+            type: string
+            maxLength: 100
+            minLength: 1
+            pattern: ^[A-Za-z0-9_-]+$
+          type: array
+          title: Source Ids
+        recommendation:
+          type: string
+          title: Recommendation
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - issue_type
+      - severity
+      - explanation
+      - source_ids
+      - recommendation
+      title: Finding
+    Health:
+      properties:
+        status:
+          type: string
+          const: ok
+          title: Status
+        mode:
+          type: string
+          const: mock
+          title: Mode
+      additionalProperties: false
+      type: object
+      required:
+      - status
+      - mode
+      title: Health
+    Transaction:
+      properties:
+        id:
+          type: string
+          maxLength: 100
+          minLength: 1
+          pattern: ^[A-Za-z0-9_-]+$
+          title: Id
+        paypal_transaction_id:
+          type: string
+          title: Paypal Transaction Id
+        amount:
+          type: string
+          pattern: ^-?[0-9]{1,10}\.[0-9]{2}$
+          title: Amount
+          description: Exact decimal amount serialized as a string
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          title: Currency
+        status:
+          type: string
+          const: COMPLETED
+          title: Status
+        transaction_date:
+          type: string
+          format: date-time
+          title: Transaction Date
+        evidence_count:
+          type: integer
+          minimum: 0.0
+          title: Evidence Count
+      additionalProperties: false
+      type: object
+      required:
+      - id
+      - paypal_transaction_id
+      - amount
+      - currency
+      - status
+      - transaction_date
+      - evidence_count
+      title: Transaction
