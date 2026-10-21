@@ -10,3 +10,7 @@ __pycache__/
 *.log
 uploads/
 private-evidence/
+
+.local/
+work/
+*.tsbuildinfo

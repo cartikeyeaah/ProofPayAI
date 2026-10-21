@@ -1,77 +1,120 @@
 # ProofPay AI
 
-Day 1 foundation for payment evidence intelligence: a synthetic FastAPI backend,
-shared API contracts, a PostgreSQL schema foundation, and a temporary Streamlit
-developer dashboard. Member 2 owns the AI pipeline; Member 3 owns the final Next.js UI.
+Merchant evidence workspace: Next.js dashboard, FastAPI, PostgreSQL, private local
+files, and the existing deterministic AI engine. No hosted model, live payment or
+dispute submission is implemented. Use synthetic evidence only. Sandbox imports,
+when configured, are labelled separately from synthetic transactions.
 
-## Run locally (Python 3.11+)
+## Local persistent workspace
 
-Run these commands from the existing repository:
+Requires Python 3.11+ (verified 3.14), Node 24 (verified 24.13.1), and PostgreSQL
+(verified 14.24). Reuse `.venv`; do not recreate an existing environment.
+Start PostgreSQL with your installation's service command, then create a **new** database:
 
 ```bash
+createdb -T template0 -E UTF8 proofpay
 cd /Users/karansingh/ProofPayAI
-python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r backend/requirements.txt -r testing-ui/requirements.txt
-python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+export DATABASE_URL='postgresql+psycopg://YOUR_LOCAL_ROLE@127.0.0.1:5432/proofpay'
+export STORAGE_ROOT="$PWD/.local/private-evidence"
+export FRONTEND_ORIGINS='http://127.0.0.1:3000,http://localhost:3000'
+python -m alembic upgrade head
+python -m alembic check
+python -m backend.manage create-user --email merchant@example.test --merchant 'Synthetic Merchant'
+python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --workers 1
 ```
 
-Open Swagger at <http://127.0.0.1:8000/docs> and health at
-<http://127.0.0.1:8000/api/v1/health>. In a second terminal:
+The admin command prompts for a password and atomically creates a merchant/user
+plus one explicitly synthetic transaction. Use your PostgreSQL role/port and secure
+password configuration; never paste credentials into committed files. Existing
+`.env` files are untouched and are **not automatically loaded by the backend**.
+
+Frontend, in a second terminal:
+
+```bash
+cd /Users/karansingh/ProofPayAI/frontend
+npm ci
+BACKEND_INTERNAL_URL=http://127.0.0.1:8000 npm run dev -- --hostname 127.0.0.1 --port 3000
+```
+
+Open http://127.0.0.1:3000 and sign in with the provisioned account. Select the
+synthetic transaction, upload evidence, run analysis, refresh status, inspect
+sources, edit/save the draft, and explicitly review/approve it. Approval does not
+send anything. Editing an approved draft resets its approval.
+
+For a local production-build check, replace `npm run dev` with:
+
+```bash
+BACKEND_INTERNAL_URL=http://127.0.0.1:8000 npm run build
+BACKEND_INTERNAL_URL=http://127.0.0.1:8000 npm run start -- --hostname 127.0.0.1 --port 3000
+```
+
+## Demo mode and optional OCR
+
+With DATABASE_URL unset, the backend starts an unauthenticated, temporary synthetic
+demo. Bind it to loopback only. The dashboard prominently labels this mode;
+restart loses demo data. The Streamlit dashboard remains available for this mode
+only: see [testing-ui/README.md](testing-ui/README.md).
+
+Text and text-PDF extraction work without OCR. To enable scanned PDFs, PNG and JPEG:
+
+```bash
+# macOS prerequisite installation, if not already installed:
+brew install tesseract poppler
+cd /Users/karansingh/ProofPayAI
+source .venv/bin/activate
+python -m pip install -r ai_engine/requirements-ocr.txt
+export OCR_ENABLED=true
+# Restart the backend in this shell.
+```
+
+`tesseract` and `pdftoppm` must be on PATH. Recognition was tested with generated
+PNG, JPEG and scanned PDF fixtures; handwriting and arbitrary scans are not
+validated. Missing tools produce an explicit unavailable status. The adapter calls
+the existing engine interface; Member 2's algorithms are unchanged.
+
+## Verification
+
+Use a separate migrated test database; tests add synthetic merchant data.
+Stop any backend using that database first (one supervisor owns the database).
 
 ```bash
 cd /Users/karansingh/ProofPayAI
 source .venv/bin/activate
-python -m streamlit run testing-ui/app.py --server.address 127.0.0.1 --server.port 8501
-```
-
-Open <http://127.0.0.1:8501>. Select the synthetic transaction, create a mock job,
-refresh its status, then retrieve static demo findings. The backend URL is editable.
-No credentials, PostgreSQL, or external services are needed. `.env.example` documents
-future placeholders; it is not automatically loaded. Optionally export `BACKEND_URL`
-to change the dashboard's initial URL.
-
-## Verify
-
-```bash
-cd /Users/karansingh/ProofPayAI
-source .venv/bin/activate
-python -m pytest backend/tests testing-ui/test_dashboard.py -q
+export PROOFPAY_TEST_DATABASE_URL='postgresql+psycopg://YOUR_LOCAL_ROLE@127.0.0.1:5432/proofpay_test'
+DATABASE_URL="$PROOFPAY_TEST_DATABASE_URL" python -m alembic upgrade head
+DATABASE_URL="$PROOFPAY_TEST_DATABASE_URL" python -m alembic check
+# Keep DATABASE_URL unset for the test runner; its explicit test variable activates DB tests.
+env -u DATABASE_URL python -m pytest backend/tests ai_engine/tests testing-ui -q
 python -m backend.export_openapi
+python -m pip check
+cd frontend
+npm run typecheck
+npm run lint
+npm test
+BACKEND_INTERNAL_URL=http://127.0.0.1:8000 npm run build
 ```
 
-The tests cover the API, error envelopes, CORS, schema validity and drift, and the
-Streamlit dashboard calling a real local HTTP backend. Backend-only verification:
-`python -m pytest backend/tests -q` (install only backend requirements).
-Regenerate and commit OpenAPI whenever route or model contracts change.
+See [docs/FULLSTACK-VERIFICATION.md](docs/FULLSTACK-VERIFICATION.md) for actual
+results, browser verification and limitations. DB tests skip explicitly without a
+test URL; OCR tests skip without local dependencies. A skipped test is not a pass.
 
-Example job creation:
+## Architecture and operation
 
-```bash
-curl -i -X POST http://127.0.0.1:8000/api/v1/transactions/txn_demo_001/analyze \
-  -H 'Content-Type: application/json' -d '{}'
-```
+- `frontend/`: typed HTTP client, responsive merchant dashboard and component tests.
+- `backend/app/`: API, cookie sessions/CSRF, private uploads, supervised analysis,
+  drafts, approval and integration status.
+- `backend/db/`: PostgreSQL persistence, merchant scoping and restart recovery.
+- `database/migrations/`: Alembic isolated `proofpay` schema; historical
+  `database/schema.sql` is not the deployed application migration.
+- `ai_engine/`: existing deterministic parsing, matching, validation and drafting.
+- `contracts/openapi.yaml`: generated public API documentation; live `/docs` and
+  `/openapi.json` are available on the backend.
+- [Deployment and Sandbox setup](docs/DEPLOYMENT.md),
+  [database model](docs/DATABASE.md), [API notes](docs/API_CONTRACT.md).
 
-## Layout and handoff
-
-- `backend/app/`: schemas, synthetic store, routes, errors, app factory.
-- `backend/tests/`: API and contract tests.
-- `contracts/`: transaction and analysis fixtures plus generated OpenAPI.
-- `database/schema.sql`: proposed PostgreSQL DDL, not connected to the API.
-- `testing-ui/`: temporary HTTP client dashboard and integration test.
-- `docs/API_CONTRACT.md`: API fields, errors, and Member 2/3 integration boundaries.
-- `docs/DATABASE.md`: entities, integrity constraints, persistence work remaining.
-- `docs/DAY1-DECISIONS.md`: scope decisions and verification notes.
-
-## Limitations
-
-All data is synthetic. Jobs remain `queued` indefinitely; there is no worker or
-queue integration. Static demo findings are a contract example, not computed
-results. Evidence counts and source IDs are illustrative: no documents are stored.
-In-memory jobs disappear on restart/reload and are not shared between processes;
-use one backend worker. There is no authentication or enforced merchant access
-isolation. CORS is restricted to the two local Streamlit origins, but is not access
-control (Streamlit calls from its Python server). Keep this prototype on loopback.
-No PayPal integration, uploads, OCR, parsing, matching, LLM calls, response generation,
-production persistence, migrations, retention controls, or final frontend are included.
-The SQL foundation is documented but has not been applied to PostgreSQL.
+The worker runs inside the single backend process and supervises each pipeline in
+a separate killable subprocess (30-second deadline). There is no second worker
+command. Persisted interrupted jobs become failed after restart; retry creates a
+new run. This is a hackathon deployment, not a distributed durable job queue.

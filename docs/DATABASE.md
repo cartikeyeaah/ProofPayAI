@@ -1,3 +1,7 @@
+> Updated 2026-10-22: the historical foundation below is retained for context.
+> Current behavior is described by the full-stack section below, README.md and
+> DEPLOYMENT.md. Earlier missing-feature statements describe the previous version.
+
 # PostgreSQL foundation
 
 `database/schema.sql` is a proposed schema, not a migration system or implemented
@@ -51,3 +55,32 @@ The approval flag is constrained to true for this stage; approval/submission nee
 a separately designed workflow. Failure codes are reserved in SQL but not exposed
 by the current Analysis contract. Schema deployment, migrations, transaction
 boundaries, durable jobs, access controls, and database tests are future work.
+
+
+## Integration update — 2026-10-22
+
+The API now stores uploaded bytes in a private temporary directory and maintains
+metadata, facts, jobs, and full validated pipeline results in process-local memory.
+This is not PostgreSQL or durable object storage. No schema changes were needed.
+Evidence counts are now derived from uploaded records; the illustrative fixture's
+count of 2 is no longer used as the runtime count. Restart/reload discards metadata
+and results; clean shutdown removes files. The persistence/security work above
+remains outstanding. See INTEGRATION-VERIFICATION.md for the tested local workflow.
+
+## Current application schema
+
+Alembic creates the isolated `proofpay` schema without modifying historical public
+tables: merchants, users, sessions, transactions, evidence_documents, analysis_runs,
+findings, finding_sources, draft_responses, draft_revisions, audit_events and
+idempotency_keys. `database/migrations/schema_v1.py` is the frozen migration snapshot;
+`backend/db/models.py` is runtime metadata. Destructive downgrade is disabled.
+
+Scoped external/API IDs are unique; money is Numeric(12,2). Composite merchant/
+resource foreign keys enforce child ownership. Each document's direct transaction
+FK is its persisted association; source rows reference both finding and document.
+JSONB preserves public contracts and provenance. Binary files stay outside SQL.
+Snapshot updates are transactional; audit events are append-only in the application.
+
+A per-merchant cache has a single-process advisory lease. SQL is the durable source
+reloaded on restart. This small implementation saves merchant snapshots and filters/
+paginates the cache; large datasets need incremental writes and SQL pagination.

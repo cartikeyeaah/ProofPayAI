@@ -5,3 +5,8 @@ httpx>=0.28,<1
 pytest>=8.3,<10
 PyYAML>=6,<7
 openapi-spec-validator>=0.7,<0.9
+python-multipart>=0.0.18,<1
+-r ../ai_engine/requirements.txt
+sqlalchemy>=2.0,<3
+alembic>=1.14,<2
+psycopg[binary]>=3.2,<4

@@ -1,0 +1,30 @@
+{
+  "contract_version": "1.0",
+  "analysis_id": "analysis_synthetic_001",
+  "transaction": {
+    "id": "txn_demo_001",
+    "paypal_transaction_id": "DEMO-1001",
+    "amount": "150.00",
+    "currency": "USD",
+    "status": "COMPLETED",
+    "transaction_date": "2026-10-15T10:30:00Z",
+    "evidence_count": 2
+  },
+  "documents": [
+    {
+      "id": "doc_invoice_001",
+      "filename": "synthetic-invoice.txt",
+      "document_type": "invoice",
+      "media_type": "text/plain",
+      "text": "SYNTHETIC INVOICE — NOT A REAL PAYMENT\nPayPal Transaction ID: DEMO-1001\nTotal: USD 150.00\nInvoice Date: 2026-10-15\nOrder Date: 2026-10-15\n"
+    },
+    {
+      "id": "doc_delivery_001",
+      "filename": "synthetic-delivery.txt",
+      "document_type": "delivery_record",
+      "media_type": "text/plain",
+      "text": "SYNTHETIC DELIVERY RECORD\nTransaction ID: DEMO-1001\nDelivery Status: delivered\nDelivery Date: 2026-10-17\nTracking ID: SYNTHETIC-TRACK-001\n"
+    }
+  ],
+  "require_delivery": true
+}
