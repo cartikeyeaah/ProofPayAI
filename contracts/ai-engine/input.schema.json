@@ -1,0 +1,168 @@
+{
+  "$defs": {
+    "EvidenceDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "filename": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Filename",
+          "type": "string"
+        },
+        "document_type": {
+          "enum": [
+            "invoice",
+            "order_confirmation",
+            "delivery_record",
+            "other"
+          ],
+          "title": "Document Type",
+          "type": "string"
+        },
+        "media_type": {
+          "enum": [
+            "text/plain",
+            "application/pdf",
+            "image/png",
+            "image/jpeg"
+          ],
+          "title": "Media Type",
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "maxLength": 200000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "content_base64": {
+          "anyOf": [
+            {
+              "maxLength": 13981016,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Base64"
+        }
+      },
+      "required": [
+        "id",
+        "filename",
+        "document_type",
+        "media_type"
+      ],
+      "title": "EvidenceDocument",
+      "type": "object"
+    },
+    "Transaction": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "paypal_transaction_id": {
+          "title": "Paypal Transaction Id",
+          "type": "string"
+        },
+        "amount": {
+          "description": "Exact decimal amount serialized as a string",
+          "pattern": "^-?[0-9]{1,10}\\.[0-9]{2}$",
+          "title": "Amount",
+          "type": "string"
+        },
+        "currency": {
+          "pattern": "^[A-Z]{3}$",
+          "title": "Currency",
+          "type": "string"
+        },
+        "status": {
+          "const": "COMPLETED",
+          "title": "Status",
+          "type": "string"
+        },
+        "transaction_date": {
+          "format": "date-time",
+          "title": "Transaction Date",
+          "type": "string"
+        },
+        "evidence_count": {
+          "minimum": 0,
+          "title": "Evidence Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "paypal_transaction_id",
+        "amount",
+        "currency",
+        "status",
+        "transaction_date",
+        "evidence_count"
+      ],
+      "title": "Transaction",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "contract_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Contract Version",
+      "type": "string"
+    },
+    "analysis_id": {
+      "maxLength": 100,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "title": "Analysis Id",
+      "type": "string"
+    },
+    "transaction": {
+      "$ref": "#/$defs/Transaction"
+    },
+    "documents": {
+      "items": {
+        "$ref": "#/$defs/EvidenceDocument"
+      },
+      "maxItems": 25,
+      "title": "Documents",
+      "type": "array"
+    },
+    "require_delivery": {
+      "default": true,
+      "title": "Require Delivery",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "analysis_id",
+    "transaction",
+    "documents"
+  ],
+  "title": "PipelineInput",
+  "type": "object"
+}
