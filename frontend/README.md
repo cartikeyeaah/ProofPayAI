@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ProofPay AI · Evidence Room
 
-## Getting Started
+ProofPay is a payment evidence intelligence workspace. This frontend uses a calm, forensic “Evidence Room” concept: green-black ledger surfaces, warm paper text, and a chartreuse signal color. Serif editorial headlines pair with compact ledger-style data. The three signature interactions are a source-linked evidence timeline, clickable citations that open a source viewer, and a readiness strip that makes the missing delivery receipt visible.
 
-First, run the development server:
+## Run locally
 
 ```bash
+cd frontend
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The project is currently scaffolded on Next.js 16 App Router with TypeScript strict mode and Tailwind CSS v4. It uses the repository’s existing package versions. All sample identities and transaction records are synthetic.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Copy `.env.example` to `.env.local` when connecting to the FastAPI service.
 
-## Learn More
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_USE_MOCK` | `true` | Select the seeded demo data mode. |
+| `NEXT_PUBLIC_API_BASE_URL` | empty | Base URL for the FastAPI service when mock mode is disabled. |
 
-To learn more about Next.js, take a look at the following resources:
+`src/lib/api/client.ts` defines the shared API contract and HTTP endpoint mapping; `src/lib/api/mock-api.ts` provides a typed mock implementation. The showcase screens use the seeded demo data directly so the entire case can be demonstrated offline.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## FastAPI endpoint mapping
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/transactions` | List transactions |
+| GET | `/transactions/{id}` | Get a transaction |
+| POST | `/transactions/{id}/evidence` | Upload evidence (multipart) |
+| GET | `/transactions/{id}/evidence` | List case evidence |
+| DELETE | `/evidence/{id}` | Delete evidence |
+| POST | `/transactions/{id}/analyze` | Start analysis |
+| GET | `/transactions/{id}/analysis` | Get analysis and progress |
+| POST | `/transactions/{id}/report/generate` | Generate a draft response |
+| PUT | `/reports/{id}` | Save report edits |
+| POST | `/reports/{id}/approve` | Approve a draft for merchant submission |
+| GET | `/audit?transactionId=` | Read case audit events |
+| GET | `/integrations/paypal/status` | Read PayPal connection status |
+| POST | `/integrations/paypal/connect` | Start PayPal connection |
 
-## Deploy on Vercel
+## Two-minute demo
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Open **Start the demo case** on the dashboard.
+2. Review the $150.00 disputed payment and the 3-of-4 evidence readiness strip.
+3. Select **Evidence** to inspect the seeded invoice, order confirmation, and customer message. Upload accepts PDF, PNG, JPG, TXT, and EML files up to 10 MB.
+4. Select **Analysis** and open a citation chip. The source viewer shows the excerpt tied to the finding.
+5. Select **Report**, edit the draft, mark the critical finding reviewed, acknowledge the approval statement, then choose **Approve & mark ready**.
+6. Confirm the action. The case is marked ready for submission; it is never sent to PayPal by this UI.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Safety and demo notes
+
+- No secrets or PayPal credentials belong in this frontend.
+- Every seeded analysis finding has a typed source reference; uncertain matches are visibly flagged.
+- Approval is explicit, requires review of critical/high findings and an acknowledgement, and writes only a ready state in this demo.
+- Email is masked by default. No dispute outcome prediction is shown.
+- The demo records are synthetic and labeled as such in the workspace footer.
+
+## Checks
+
+```bash
+npm run lint
+npm run build
+```
