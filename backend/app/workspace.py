@@ -146,3 +146,22 @@ def approve(request: Request, analysis_id: Identifier, payload: ApproveDraft):
 def audit(request: Request, analysis_id: Identifier):
     store = own_analysis(request, analysis_id)
     return EventList(events=[e for e in store.events if e['resource_id']==analysis_id], revisions=[d for d in store.revisions if d['analysis_id']==analysis_id])
+
+
+@router.post('/transactions/synthetic', response_model=Transaction)
+def synthetic_transaction(request: Request):
+    """Create/reuse one explicitly synthetic upload workspace per merchant."""
+    from .mock_data import TRANSACTION
+    store = get_store(request)
+    rate_limit(request.app, ('synthetic',store.merchant_id),count=10)
+    with store.lock:
+        for transaction in store.transactions.values():
+            if store.origins.get(transaction.id)=='synthetic':
+                return transaction
+        tid='txn_'+str(uuid4())
+        transaction=TRANSACTION.model_copy(update={'id':tid,'paypal_transaction_id':'PROOFPAY-TEST-'+str(uuid4())[:8].upper(),'transaction_date':now(),'evidence_count':0},deep=True)
+        store.transactions[tid]=transaction
+        store.origins[tid]='synthetic'
+        event(store,'synthetic_transaction_created',tid,request.state.actor)
+        save(store)
+        return transaction

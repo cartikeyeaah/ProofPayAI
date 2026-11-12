@@ -146,3 +146,112 @@ def test_transaction_search_pagination_and_sort(tmp_path):
         assert client.get('/api/v1/transaction-page',params={'page':2,'page_size':1,'sort':'amount','direction':'asc'}).json()['items'][0]['id']==tid
         assert client.get('/api/v1/transaction-page',params={'analyzed':'yes'}).json()['total']==0
         assert client.get('/api/v1/transaction-page',params={'page_size':101}).status_code==422
+
+
+def test_password_change_revokes_sessions_and_expired_session_denied(tmp_path):
+    from datetime import timedelta
+    from sqlalchemy import update
+    app=create_app(URL,str(tmp_path))
+    with TestClient(app) as client:
+        _,email,_=account(app)
+        login(client,email)
+        old_cookies=dict(client.cookies)
+        response=client.post('/api/v1/auth/password',json={'current_password':'wrong','new_password':'New-synthetic-password-43'})
+        assert response.status_code==401 and response.json()['error']['code']=='INVALID_PASSWORD'
+        assert client.get('/api/v1/auth/me').status_code==200
+        assert client.post('/api/v1/auth/password',json={'current_password':PASSWORD,'new_password':'short'}).status_code==422
+        assert client.post('/api/v1/auth/password',json={'current_password':PASSWORD,'new_password':'New-synthetic-password-43'}).status_code==200
+        client.cookies.update(old_cookies)
+        assert client.get('/api/v1/auth/me').status_code==401
+        assert client.post('/api/v1/auth/login',json={'email':email,'password':PASSWORD}).status_code==401
+        assert client.post('/api/v1/auth/login',json={'email':email,'password':'New-synthetic-password-43'}).status_code==200
+        with app.state.repository.engine.begin() as conn:
+            user_id=conn.execute(select(m.users.c.id).where(m.users.c.email==email)).scalar_one()
+            conn.execute(update(m.sessions).where(m.sessions.c.user_id==user_id).values(expires_at=now()-timedelta(seconds=1)))
+        response=client.get('/api/v1/auth/me')
+        assert response.status_code==401 and response.headers['cache-control']=='no-store'
+
+
+def test_admin_password_reset_revokes_existing_sessions(tmp_path,monkeypatch):
+    from unittest.mock import patch
+    from backend.manage import main
+    monkeypatch.setenv('DATABASE_URL',URL)
+    app=create_app(URL,str(tmp_path))
+    with TestClient(app) as client:
+        _,email,_=account(app);login(client,email)
+        with patch('sys.argv',['manage','reset-password','--email',email]),patch('getpass.getpass',return_value='Reset-synthetic-password-44'):
+            main()
+        assert client.get('/api/v1/auth/me').status_code==401
+        assert client.post('/api/v1/auth/login',json={'email':email,'password':'Reset-synthetic-password-44'}).status_code==200
+
+
+def test_sandbox_check_sync_persistence_and_merchant_binding(tmp_path,monkeypatch):
+    import httpx
+    from backend.integrations.paypal import SandboxClient,SCOPE
+    from backend.app import integrations
+    app=create_app(URL,str(tmp_path))
+    with TestClient(app) as client:
+        merchant,email,_=account(app);_,other,_=account(app);login(client,email)
+        monkeypatch.setenv('PAYPAL_CLIENT_ID','synthetic-client')
+        monkeypatch.setenv('PAYPAL_CLIENT_SECRET','synthetic-secret')
+        monkeypatch.setenv('PAYPAL_MERCHANT_ID',merchant)
+        def transport(request):
+            if request.url.path.endswith('/token'): return httpx.Response(200,json={'access_token':'synthetic','scope':SCOPE,'expires_in':3600})
+            return httpx.Response(200,json={'total_pages':1,'transaction_details':[{'transaction_info':{'transaction_id':'SANDBOX-INTEGRATION-1','transaction_status':'S','transaction_amount':{'value':'1.00','currency_code':'USD'},'transaction_initiation_date':'2026-11-12T10:00:00Z'}}]})
+        monkeypatch.setattr(integrations,'SandboxClient',lambda *a:SandboxClient(*a,transport=httpx.MockTransport(transport)))
+        assert client.post('/api/v1/integrations/paypal/check').json()['reporting_access'] is True
+        assert client.get('/api/v1/transactions').json().__len__()==1
+        assert client.post('/api/v1/integrations/paypal/sync').json()['imported']==1
+        assert client.post('/api/v1/integrations/paypal/sync').json()['imported']==0
+        assert client.get('/api/v1/integrations').json()['paypal_verified'] is True
+        login(client,other)
+        assert client.post('/api/v1/integrations/paypal/check').status_code==503
+        assert client.post('/api/v1/integrations/paypal/sync').status_code==503
+    with TestClient(create_app(URL,str(tmp_path))) as client:
+        login(client,email)
+        page=client.get('/api/v1/transaction-page').json()
+        assert page['total']==2 and 'sandbox' in page['origins'].values()
+        monkeypatch.delenv('PAYPAL_CLIENT_SECRET')
+        assert client.get('/api/v1/integrations').json()['paypal']=='not-configured'
+
+
+def test_registration_login_duplicate_validation_and_isolation(tmp_path):
+    from sqlalchemy import func
+    app=create_app(URL,str(tmp_path))
+    with TestClient(app) as client:
+        email=str(uuid4())+'@example.test'
+        payload={'merchant_name':'New Merchant','email':email.upper(),'password':PASSWORD}
+        assert client.post('/api/v1/auth/register',json={**payload,'password':'short'}).status_code==422
+        assert client.post('/api/v1/auth/register',json={**payload,'email':'invalid'}).status_code==422
+        assert client.post('/api/v1/auth/register',json=payload,headers={'Origin':'https://evil.example'}).status_code==403
+        assert client.post('/api/v1/auth/register',json=payload).status_code==201
+        with app.state.repository.engine.connect() as conn:
+            count=conn.execute(select(func.count()).select_from(m.merchants)).scalar()
+            stored=conn.execute(select(m.users.c.password_hash).where(m.users.c.email==email)).scalar_one()
+            assert stored != PASSWORD and stored.startswith('scrypt$')
+        assert client.post('/api/v1/auth/register',json=payload).status_code==409
+        with app.state.repository.engine.connect() as conn:
+            assert conn.execute(select(func.count()).select_from(m.merchants)).scalar()==count
+        login(client,email)
+        assert client.get('/api/v1/auth/me').json()['merchant_name']=='New Merchant'
+        assert client.get('/api/v1/transactions').json()==[]
+        for _ in range(3):client.post('/api/v1/auth/register',json=payload)
+        assert client.post('/api/v1/auth/register',json=payload).status_code==429
+
+
+def test_new_account_can_start_upload_without_paypal(tmp_path):
+    app=create_app(URL,str(tmp_path))
+    with TestClient(app) as client:
+        email=str(uuid4())+'@example.test'
+        assert client.post('/api/v1/auth/register',json={'merchant_name':'Upload test','email':email,'password':PASSWORD}).status_code==201
+        login(client,email)
+        r=client.post('/api/v1/transactions/synthetic');assert r.status_code==200
+        tid=r.json()['id']
+        assert client.post('/api/v1/transactions/synthetic').json()['id']==tid
+        assert client.get('/api/v1/transaction-page').json()['origins'][tid]=='synthetic'
+        r=client.post('/api/v1/transactions/'+tid+'/documents',files={'file':('test.txt',b'Synthetic test evidence','text/plain')},data={'document_type':'other'})
+        assert r.status_code==201
+        cookies=dict(client.cookies)
+    with TestClient(create_app(URL,str(tmp_path))) as client:
+        client.cookies.update(cookies)
+        assert client.get('/api/v1/transactions/'+tid).json()['evidence_count']==1

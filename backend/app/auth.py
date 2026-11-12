@@ -5,8 +5,10 @@ import time
 from datetime import timedelta
 from uuid import uuid4
 from fastapi import APIRouter, Request, Response
-from pydantic import Field
-from sqlalchemy import select, delete
+from pydantic import Field, field_validator
+from sqlalchemy.exc import IntegrityError
+import re
+from sqlalchemy import select, delete, update
 from backend.db import models as m
 from backend.db.repository import now, event, save
 from .schemas import ContractModel
@@ -49,7 +51,7 @@ def rate_limit(app, key, count=10, window=60):
         if len(app.state.rate_attempts) > 10000:
             app.state.rate_attempts = {k:v for k,v in app.state.rate_attempts.items() if v[-1] > current-window}
 
-PUBLIC = {'/api/v1/health', '/api/v1/ready', '/api/v1/capabilities', '/api/v1/auth/login', '/docs', '/openapi.json', '/docs/oauth2-redirect'}
+PUBLIC = {'/api/v1/health', '/api/v1/ready', '/api/v1/capabilities', '/api/v1/auth/login', '/api/v1/auth/register', '/docs', '/openapi.json', '/docs/oauth2-redirect'}
 
 def authorize(request):
     app = request.app
@@ -78,7 +80,7 @@ def login(request: Request, response: Response, payload: Login):
     if repo is None: raise APIError(409, 'DEMO_MODE', 'Demo mode has no login. Configure PostgreSQL for accounts.')
     rate_limit(request.app, ('login', request.client.host if request.client else 'unknown'), count=5)
     with repo.engine.begin() as conn:
-        user = conn.execute(select(m.users, m.merchants.c.name).join(m.merchants).where(m.users.c.email == payload.email.strip().lower())).mappings().first()
+        user = conn.execute(select(m.users, m.merchants.c.name).join(m.merchants).where(m.users.c.email == payload.email.strip().lower()).with_for_update(of=m.users)).mappings().first()
         # Perform the same password derivation for unknown accounts.
         valid = check_password(payload.password, user['password_hash'] if user else request.app.state.dummy_password_hash)
         if not user or not valid: raise APIError(401, 'INVALID_LOGIN', 'Email or password is incorrect.')
@@ -102,3 +104,63 @@ def logout(request: Request, response: Response):
             conn.execute(delete(m.sessions).where(m.sessions.c.user_id == request.state.actor))
     response.delete_cookie(COOKIE, path='/')
     return Logout()
+
+
+class ChangePassword(ContractModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=12, max_length=256)
+
+
+@router.post('/password', response_model=Logout)
+def change_password(request: Request, response: Response, payload: ChangePassword):
+    repo = request.app.state.repository
+    if repo is None:
+        raise APIError(409, 'DEMO_MODE', 'Demo mode has no password.')
+    rate_limit(request.app, ('password', request.state.actor), count=5)
+    with repo.engine.begin() as conn:
+        user = conn.execute(select(m.users).where(m.users.c.id == request.state.actor).with_for_update()).mappings().one()
+        if not check_password(payload.current_password, user['password_hash']):
+            raise APIError(401, 'INVALID_PASSWORD', 'Current password is incorrect.')
+        if payload.current_password == payload.new_password:
+            raise APIError(422, 'PASSWORD_UNCHANGED', 'Choose a different password.')
+        conn.execute(update(m.users).where(m.users.c.id == user['id']).values(password_hash=hash_password(payload.new_password)))
+        conn.execute(delete(m.sessions).where(m.sessions.c.user_id == user['id']))
+    response.delete_cookie(COOKIE, path='/')
+    return Logout()
+
+
+class Registration(ContractModel):
+    merchant_name: str = Field(min_length=1, max_length=120)
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=12, max_length=256)
+
+    @field_validator('email')
+    @classmethod
+    def valid_email(cls, value):
+        value = value.strip().lower()
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
+            raise ValueError('Enter a valid email address.')
+        return value
+
+    @field_validator('merchant_name')
+    @classmethod
+    def valid_name(cls, value):
+        if not value.strip(): raise ValueError('Merchant name is required.')
+        return value.strip()
+
+class RegistrationResult(ContractModel):
+    status: str = 'created'
+
+@router.post('/register', response_model=RegistrationResult, status_code=201)
+def register(request: Request, payload: Registration):
+    repo = request.app.state.repository
+    if repo is None: raise APIError(409,'DEMO_MODE','Configure PostgreSQL to create an account.')
+    rate_limit(request.app, ('register',request.client.host if request.client else 'unknown'),count=5)
+    merchant, user = str(uuid4()), str(uuid4())
+    try:
+        with repo.engine.begin() as conn:
+            conn.execute(m.merchants.insert().values(id=merchant,name=payload.merchant_name))
+            conn.execute(m.users.insert().values(id=user,merchant_id=merchant,email=payload.email,password_hash=hash_password(payload.password),created_at=now()))
+    except IntegrityError:
+        raise APIError(409,'ACCOUNT_EXISTS','An account with this email already exists. Sign in instead.')
+    return RegistrationResult()
