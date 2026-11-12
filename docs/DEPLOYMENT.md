@@ -50,7 +50,7 @@ all merchant data. Eight-hour session tokens are opaque and stored hashed in SQL
 Cookies are HttpOnly, SameSite=Lax and Secure in production. Mutations require the
 session CSRF header and an allowed Origin when present. Logout revokes all sessions
 for that user. Passwords use salted scrypt. Accounts are provisioned by the hidden-
-password CLI; public signup, password reset and SSO are unavailable.
+password CLI; public signup, email password reset and SSO are unavailable.
 
 ## Worker and retry behavior
 
@@ -111,3 +111,13 @@ a PayPal account password.
   micromatch → fast-glob → Next ESLint plugin/config). The registry suggests an
   incompatible downgrade to Next ESLint 14.x, which was not applied. Production-only
   `npm audit --omit=dev` reports zero vulnerabilities.
+
+## November authentication/Sandbox update
+
+Settings now supports password changes; the admin CLI supports `reset-password`.
+Both revoke all user sessions. Expired sessions return the dashboard to sign-in.
+POST `/api/v1/auth/password` requires the current password plus a new 12–256
+character password and CSRF. POST `/api/v1/integrations/paypal/check` checks current
+credentials/reporting access without import. The dashboard remains reporting-only;
+`python -m backend.sandbox_payments` is an explicit separate Sandbox-only payment
+test utility. See PAYPAL-SANDBOX-SETUP.md for its workflow and verification limits.

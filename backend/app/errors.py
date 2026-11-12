@@ -10,7 +10,7 @@ class APIError(Exception):
 def error_response(request: Request, status_code: int, code: str, message: str):
     return JSONResponse(status_code=status_code, content={"error": {
         "code": code, "message": message, "request_id": request.state.request_id}},
-        headers={"X-Request-ID": request.state.request_id})
+        headers={"X-Request-ID": request.state.request_id, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
 
 async def api_error_handler(request: Request, exc: APIError):
     return error_response(request, exc.status_code, exc.code, exc.message)
